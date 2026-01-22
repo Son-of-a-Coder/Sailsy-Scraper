@@ -62,10 +62,19 @@ async function scrapePlaywright(url) {
   });
   const html = await page.content();
   const title = await page.title();
+  const metadata = await page.evaluate(() =>
+    document.querySelector('meta[name="description"]')?.content || null
+  );
 
   await browser.close();
 
-  return cleanHTML(html);
+  return {
+    "title": title,
+    "metadata": metadata,
+    "content": cleanHTML(html)
+  };
+
+  // return cleanHTML(html);
   // return buildFirecrawlLikeResponse({ url, html, title });
   return html;
 }
@@ -81,7 +90,7 @@ async function scrapePuppeteer(url) {
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
       "--disable-gpu",
-      "--single-process"
+      // "--single-process"
     ]
   });
   const page = await browser.newPage();
@@ -91,10 +100,19 @@ async function scrapePuppeteer(url) {
   });
   const html = await page.content();
   const title = await page.title();
+  const metadata = await page.evaluate(() =>
+    document.querySelector('meta[name="description"]')?.content || null
+  );
 
   await browser.close();
+
+  return {
+    "title": title,
+    "metadata": metadata,
+    "content": cleanHTML(html)
+  };
   
-  return cleanHTML(html);
+  // return cleanHTML(html);
   // return buildFirecrawlLikeResponse({ url, html, title });
   return html;
 }
