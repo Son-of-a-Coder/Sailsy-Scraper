@@ -133,6 +133,7 @@ app.get('/api/scrape/ip', async (req, res) => {
   }
 });
 
+// Playwright scraper
 app.post('/api/scrape/playwright', async (req, res) => {
   try {
     const { url } = req.body;
@@ -143,6 +144,7 @@ app.post('/api/scrape/playwright', async (req, res) => {
   }
 });
 
+// Puppeteer scraper
 app.post('/api/scrape/puppeteer', async (req, res) => {
   try {
     const { url } = req.body;
@@ -160,3 +162,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Scraper API running on port ${PORT}`);
 });
+
+
