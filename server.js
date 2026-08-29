@@ -1,7 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
-import { chromium } from 'playwright';
 import puppeteer from 'puppeteer';
 import TurndownService from 'turndown';
 
@@ -9,6 +8,32 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
+
+// Health first — always unauthenticated, used by Docker/uptime checks.
+app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Shared-secret gate: when SCRAPE_SECRET is set, every scrape route requires
+// the same value in the x-scrape-secret header. Without it the service is an
+// open scraping proxy on a public IP.
+app.use((req, res, next) => {
+  const secret = process.env.SCRAPE_SECRET;
+  if (!secret) return next();
+  if (req.get('x-scrape-secret') === secret) return next();
+  res.status(401).json({ error: 'unauthorized' });
+});
+
+// SSRF guard: never fetch link-local/private/loopback targets (blocks e.g.
+// the DigitalOcean metadata service at 169.254.169.254).
+function isBlockedTarget(rawUrl) {
+  let host;
+  try {
+    host = new URL(rawUrl).hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal')) return true;
+  return /^(127\.|10\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|::1$|\[)/.test(host);
+}
 
 const turndownService = new TurndownService({
   headingStyle: 'atx',
@@ -44,6 +69,7 @@ function cleanHTML(html) {
  * Playwright scraper
  */
 async function scrapePlaywright(url) {
+  const { chromium } = await import('playwright');
   const browser = await chromium.launch({
     headless: true,
     args: [
@@ -137,6 +163,7 @@ app.get('/api/scrape/ip', async (req, res) => {
 app.post('/api/scrape/playwright', async (req, res) => {
   try {
     const { url } = req.body;
+    if (!url || isBlockedTarget(url)) return res.status(400).json({ error: 'invalid url' });
     const data = await scrapePlaywright(url);
     res.json({ source: 'playwright', data });
   } catch (err) {
@@ -148,6 +175,7 @@ app.post('/api/scrape/playwright', async (req, res) => {
 app.post('/api/scrape/puppeteer', async (req, res) => {
   try {
     const { url } = req.body;
+    if (!url || isBlockedTarget(url)) return res.status(400).json({ error: 'invalid url' });
     const data = await scrapePuppeteer(url);
     res.json({ source: 'puppeteer', data });
   } catch (err) {
